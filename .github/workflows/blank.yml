@@ -1,0 +1,59 @@
+name: TensorFlow Raspberry Pi Cross-Compilation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths: [ 'tensorflow/**' ]
+
+jobs:
+  build-tensorflow-armhf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120  # 构建可能需要较长时间
+
+    steps:
+    - name: Checkout TensorFlow source
+      uses: actions/checkout@v3
+      with:
+        repository: tensorflow/tensorflow
+        ref: r2.18
+        path: tensorflow
+
+    - name: Set up Docker
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y docker.io
+        sudo systemctl start docker
+        sudo docker run --rm hello-world
+
+    - name: Prepare build environment
+      run: |
+        cd tensorflow
+        git config --global --add safe.directory /__w/tensorflow-armhf-crosscompile/tensorflow-armhf-crosscompile/tensorflow
+        git submodule update --init --recursive
+
+    - name: Run cross-compilation script
+      run: |
+        cd tensorflow
+        sudo tensorflow/tools/ci_build/ci_build.sh PI-PYTHON37 \
+          tensorflow/tools/ci_build/pi/build_raspberry_pi.sh
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: tensorflow-armhf-wheel
+        path: tensorflow/output-artifacts/*.whl
+        retention-days: 5
+
+    - name: Notify completion
+      if: always()
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const { owner, repo } = context.repo;
+          await github.rest.actions.createWorkflowDispatch({
+            owner,
+            repo,
+            workflow_id: 'notify.yml',
+            ref: 'main',
+          });
