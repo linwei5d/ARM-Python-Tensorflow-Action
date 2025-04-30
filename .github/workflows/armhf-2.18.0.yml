@@ -1,14 +1,9 @@
-name: TensorFlow Raspberry Pi Cross-Compilation
+name: TensorFlow Raspberry Pi Cross-Compilation (r2.18)
 
 on:
   workflow_dispatch:
   push:
     branches: [ main ]
-    paths: [ 'tensorflow/**' ]
-
-env:
-  TF_VERSION: r2.18
-  PI_TARGET: PI-PYTHON37  # 使用 PI-PYTHON37_AARCH64 构建 ARM64 版本
 
 jobs:
   build-tensorflow-armhf:
@@ -16,38 +11,31 @@ jobs:
     timeout-minutes: 120  # 构建可能需要较长时间
 
     steps:
-    - name: Checkout TensorFlow source
+    - name: Checkout repository
       uses: actions/checkout@v4
-      with:
-        repository: tensorflow/tensorflow
-        ref: ${{ env.TF_VERSION }}
-        path: tensorflow
 
-    - name: Set up Docker
+    - name: Clone TensorFlow r2.18
       run: |
-        sudo apt-get update
-        sudo systemctl start docker
-
-    - name: Prepare build environment
-      run: |
+        git clone --depth 1 --branch r2.18 https://github.com/tensorflow/tensorflow.git
         cd tensorflow
-        git config --global --add safe.directory $GITHUB_WORKSPACE/tensorflow
-        git submodule update --init --recursive --depth=1
+        git submodule update --init --recursive --depth 1
+        cd ..
 
     - name: Run cross-compilation script
       run: |
         cd tensorflow
-        sudo tensorflow/tools/ci_build/ci_build.sh ${{ env.PI_TARGET }} \
+        sudo tensorflow/tools/ci_build/ci_build.sh PI-PYTHON37 \
           tensorflow/tools/ci_build/pi/build_raspberry_pi.sh
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: tensorflow-${{ env.TF_VERSION }}-armhf-wheel
+        name: tensorflow-r2.18-armhf-wheel
         path: tensorflow/output-artifacts/*.whl
         retention-days: 5
 
-    - name: Verify artifact
+    - name: Verify build output
       run: |
-        echo "Generated wheel files:"
-        ls -la tensorflow/output-artifacts/
+        cd tensorflow/output-artifacts
+        ls -lah *.whl
+        echo "Build completed successfully!"
