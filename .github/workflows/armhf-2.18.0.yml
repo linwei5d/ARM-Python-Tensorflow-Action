@@ -6,6 +6,10 @@ on:
     branches: [ main ]
     paths: [ 'tensorflow/**' ]
 
+env:
+  TF_VERSION: r2.18
+  PI_TARGET: PI-PYTHON37  # 使用 PI-PYTHON37_AARCH64 构建 ARM64 版本
+
 jobs:
   build-tensorflow-armhf:
     runs-on: ubuntu-latest
@@ -13,10 +17,10 @@ jobs:
 
     steps:
     - name: Checkout TensorFlow source
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         repository: tensorflow/tensorflow
-        ref: r2.18
+        ref: ${{ env.TF_VERSION }}
         path: tensorflow
 
     - name: Set up Docker
@@ -29,31 +33,23 @@ jobs:
     - name: Prepare build environment
       run: |
         cd tensorflow
-        git config --global --add safe.directory /__w/tensorflow-armhf-crosscompile/tensorflow-armhf-crosscompile/tensorflow
-        git submodule update --init --recursive
+        git config --global --add safe.directory $GITHUB_WORKSPACE/tensorflow
+        git submodule update --init --recursive --depth=1
 
     - name: Run cross-compilation script
       run: |
         cd tensorflow
-        sudo tensorflow/tools/ci_build/ci_build.sh PI-PYTHON37 \
+        sudo tensorflow/tools/ci_build/ci_build.sh ${{ env.PI_TARGET }} \
           tensorflow/tools/ci_build/pi/build_raspberry_pi.sh
 
     - name: Upload artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: tensorflow-armhf-wheel
+        name: tensorflow-${{ env.TF_VERSION }}-armhf-wheel
         path: tensorflow/output-artifacts/*.whl
         retention-days: 5
 
-    - name: Notify completion
-      if: always()
-      uses: actions/github-script@v6
-      with:
-        script: |
-          const { owner, repo } = context.repo;
-          await github.rest.actions.createWorkflowDispatch({
-            owner,
-            repo,
-            workflow_id: 'notify.yml',
-            ref: 'main',
-          });
+    - name: Verify artifact
+      run: |
+        echo "Generated wheel files:"
+        ls -la tensorflow/output-artifacts/
